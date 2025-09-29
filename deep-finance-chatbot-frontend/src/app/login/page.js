@@ -8,15 +8,27 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const { login } = useAuth();
+
+  const auth = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    const result = await login(email, password);
+
+    if (!auth || !auth.login) {
+      setError(
+        "Authentication service is not ready. Please check the console."
+      );
+      console.error(
+        "Auth context is null or login function is missing in LoginPage."
+      );
+      return;
+    }
+
+    const result = await auth.login(email, password);
     if (result.success) {
-      router.push("/chat"); // Redirect to chat page on successful login
+      router.push("/chat");
     } else {
       setError(result.message);
     }

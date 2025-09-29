@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useMemo,
+} from "react";
 import api from "../lib/api";
 
 const AuthContext = createContext(null);
@@ -11,31 +17,33 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for a token in local storage on initial load
-    const storedToken = localStorage.getItem("authToken");
-    if (storedToken) {
-      setToken(storedToken);
-      // You might want to add a call here to verify the token and get user data
-      // For now, we'll just set the token.
+    try {
+      const storedToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem("authToken")
+          : null;
+      if (storedToken) setToken(storedToken);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  });
+  }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await api.post("/auth/login", { email, password });
-      const { token, user } = response.data;
+      const res = await api.post("/auth/login", { email, password });
+      const { token: t, user: u } = res.data || {};
+      if (!t) throw new Error("No token in response");
 
-      localStorage.setItem("authToken", token);
-      setToken(token);
-      setUser(user);
+      localStorage.setItem("authToken", t);
+      setToken(t);
+      setUser(u ?? null);
 
       return { success: true };
-    } catch (error) {
-      console.error("Login failed:", error);
+    } catch (err) {
+      console.error("Login failed:", err);
       return {
         success: false,
-        message: error.response?.data?.message || "Login failed",
+        message: err?.response?.data?.message || "Login failed",
       };
     }
   };
@@ -46,13 +54,25 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  return (
-    <AuthContext.Provider
-      value={{ user, token, login, logout, loading, isAuthenticated: !!token }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      login,
+      logout,
+      loading,
+      isAuthenticated: Boolean(token),
+    }),
+    [user, token, loading]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (ctx === null) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return ctx;
+};
